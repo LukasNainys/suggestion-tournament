@@ -127,11 +127,12 @@ function renderBracket(isComplete) {
   }
 
   const rounds = bracketData.rounds;
-  const roundNames = rounds.map((_, i) => roundLabel(i, rounds.length));
+  const totalRounds = Math.log2(rounds[0].matches.length * 2);
+  const roundNames = rounds.map((_, i) => roundLabel(i, totalRounds));
 
   root.innerHTML = `
     <div class="bracket-scroll">
-      <div class="bracket-row">
+      <div class="bracket-row" style="--stack-count:${rounds[0].matches.length}">
         ${rounds.map((round, ri) => `
           <div class="round-col" style="--n:${round.matches.length}">
             <div class="round-label">${roundNames[ri]}</div>
