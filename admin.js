@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
-  collection, getDocs, query, where, serverTimestamp
+  collection, getDocs, addDoc, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -115,6 +115,7 @@ async function renderSuggestions() {
 
   const list = document.getElementById('suggestions-list');
   list.innerHTML = `
+    <button id="seed-btn" class="secondary" style="margin-bottom:1.25rem;">Add 30 sample group-activity suggestions</button>
     <h3>Pending (${pending.length})</h3>
     ${pending.map(s => suggRow(s, ['approve', 'reject'])).join('') || '<p class="subtext">None.</p>'}
     <h3 style="margin-top:1.5rem;">Approved (${approved.length})</h3>
@@ -122,6 +123,8 @@ async function renderSuggestions() {
     <h3 style="margin-top:1.5rem;">Rejected (${rejected.length})</h3>
     ${rejected.map(s => suggRow(s, ['approve'])).join('') || '<p class="subtext">None.</p>'}
   `;
+
+  document.getElementById('seed-btn').addEventListener('click', seedSampleSuggestions);
 
   list.querySelectorAll('[data-approve]').forEach(btn => btn.addEventListener('click', async () => {
     await updateDoc(doc(db, 'suggestions', btn.dataset.approve), { status: 'approved' });
@@ -142,6 +145,30 @@ function suggRow(s, actions) {
     <span>${escapeHtml(s.text)} ${s.submitter ? `<span class="submitter">— ${escapeHtml(s.submitter)}</span>` : ''}</span>
     <span class="actions">${btns}</span>
   </div>`;
+}
+
+const SAMPLE_ACTIVITIES = [
+  'Bowling night', 'Trivia night', 'Escape room', 'Board game night', 'Karaoke',
+  'Mini golf', 'Movie night', 'Potluck dinner', 'Hiking trip', 'Beach day',
+  'BBQ cookout', 'Paintball', 'Go-karting', 'Laser tag', 'Pottery class',
+  'Cooking class', 'Wine tasting', 'Axe throwing', 'Arcade night', 'Picnic in the park',
+  'Camping trip', 'Bike ride', 'Museum visit', 'Comedy club', 'Pub crawl',
+  'Bonfire night', 'Scavenger hunt', 'Roller skating', 'Farmers market trip', 'Kayaking'
+];
+
+async function seedSampleSuggestions() {
+  if (!confirm(`Add all ${SAMPLE_ACTIVITIES.length} sample suggestions, pre-approved? You can still reject any of them afterward.`)) return;
+  const btn = document.getElementById('seed-btn');
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  try {
+    await Promise.all(SAMPLE_ACTIVITIES.map(text => addDoc(collection(db, 'suggestions'), {
+      text, submitter: '', status: 'approved', createdAt: serverTimestamp()
+    })));
+  } catch (err) {
+    alert('Something went wrong adding the samples — try again.');
+  }
+  refreshAll();
 }
 
 // ---- Bracket ----
