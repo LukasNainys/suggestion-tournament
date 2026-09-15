@@ -130,7 +130,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 button.secondary {
   background: transparent;
-  color: var(--text-on-ink);
+  color: var(--text-on-paper);
   border: 2px solid var(--steel);
 }
 
