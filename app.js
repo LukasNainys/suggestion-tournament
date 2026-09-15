@@ -156,9 +156,30 @@ function renderBracket(isComplete) {
         </div>
       `);
     }
-  } else {
-    attachVoteHandlers(rounds);
   }
+
+  attachVoteCounts(rounds);
+  if (!isComplete) attachVoteHandlers(rounds);
+}
+
+// Shows vote counts only for matches that already have a declared winner
+// (i.e. a round that has closed) — never for the currently open round.
+function attachVoteCounts(rounds) {
+  rounds.forEach(round => {
+    round.matches.forEach(m => {
+      if (!m.winnerId || m.aId === 'bye' || m.bId === 'bye') return;
+      const q = query(collection(db, 'votes'), where('matchId', '==', m.id));
+      onSnapshot(q, (snap) => {
+        const counts = { [m.aId]: 0, [m.bId]: 0 };
+        snap.docs.forEach(d => {
+          const c = d.data().choice;
+          if (c in counts) counts[c]++;
+        });
+        document.querySelectorAll(`[data-vote-for="${m.id}:${m.aId}"]`).forEach(el => el.textContent = counts[m.aId]);
+        document.querySelectorAll(`[data-vote-for="${m.id}:${m.bId}"]`).forEach(el => el.textContent = counts[m.bId]);
+      });
+    });
+  });
 }
 
 function roundLabel(i, total) {
@@ -184,14 +205,16 @@ function renderMatch(m, roundIndex) {
     if (id === null) return `<div class="contender bye">TBD</div>`;
     if (id === 'bye') return `<div class="contender bye">Bye</div>`;
     const classes = ['contender'];
-    let voteHtml = '';
     if (decided) {
       classes.push(id === m.winnerId ? 'winner' : 'loser');
     }
     if (!isCurrentRound || decided) classes.push('locked');
+    // Vote counts are only ever shown once a match is decided, so people
+    // can't see running totals while a round is still open for voting.
+    const voteSpan = decided ? `<span class="votes" data-vote-for="${m.id}:${id}"></span>` : '';
     return `<button type="button" class="${classes.join(' ')}" data-match="${m.id}" data-round="${roundIndex}" data-choice="${id}" ${(!isCurrentRound || decided) ? 'disabled' : ''}>
       <span>${escapeHtml(text || '')}</span>
-      <span class="votes" data-vote-for="${m.id}:${id}"></span>
+      ${voteSpan}
     </button>`;
   };
 
@@ -204,21 +227,6 @@ function renderMatch(m, roundIndex) {
 function attachVoteHandlers(rounds) {
   const currentRound = bracketData.currentRound;
   const matches = (rounds[currentRound] && rounds[currentRound].matches) || [];
-
-  matches.forEach(m => {
-    if (m.aId === 'bye' || m.bId === 'bye' || m.winnerId) return;
-    // live vote counts for this match
-    const q = query(collection(db, 'votes'), where('matchId', '==', m.id));
-    onSnapshot(q, (snap) => {
-      const counts = { [m.aId]: 0, [m.bId]: 0 };
-      snap.docs.forEach(d => {
-        const c = d.data().choice;
-        if (c in counts) counts[c]++;
-      });
-      document.querySelectorAll(`[data-vote-for="${m.id}:${m.aId}"]`).forEach(el => el.textContent = counts[m.aId]);
-      document.querySelectorAll(`[data-vote-for="${m.id}:${m.bId}"]`).forEach(el => el.textContent = counts[m.bId]);
-    });
-  });
 
   document.querySelectorAll('.contender[data-match]').forEach(btn => {
     const matchId = btn.dataset.match;
