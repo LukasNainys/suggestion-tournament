@@ -244,9 +244,12 @@ footer.admin-link {
   gap: 1rem;
   padding: 0.7rem 0.9rem;
   background: var(--ink-raised);
+  color: var(--text-on-ink);
   border-radius: 6px;
   margin-bottom: 0.5rem;
 }
+
+.sugg-row .submitter { color: var(--steel); }
 
 .sugg-row .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
 .sugg-row button { padding: 0.4rem 0.8rem; font-size: 0.82rem; }
