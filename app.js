@@ -132,10 +132,10 @@ function renderBracket(isComplete) {
   root.innerHTML = `
     <div class="bracket-scroll">
       <div class="bracket-row">
-        ${rounds.map((matches, ri) => `
-          <div class="round-col" style="--n:${matches.length}">
+        ${rounds.map((round, ri) => `
+          <div class="round-col" style="--n:${round.matches.length}">
             <div class="round-label">${roundNames[ri]}</div>
-            ${matches.map(m => renderMatch(m, ri)).join('')}
+            ${round.matches.map(m => renderMatch(m, ri)).join('')}
           </div>
         `).join('')}
       </div>
@@ -143,7 +143,7 @@ function renderBracket(isComplete) {
   `;
 
   if (isComplete) {
-    const finalRound = rounds[rounds.length - 1];
+    const finalRound = rounds[rounds.length - 1].matches;
     const finalMatch = finalRound[0];
     const winner = finalMatch && finalMatch.winnerId
       ? getContenderText(finalMatch, finalMatch.winnerId)
@@ -203,7 +203,7 @@ function renderMatch(m, roundIndex) {
 
 function attachVoteHandlers(rounds) {
   const currentRound = bracketData.currentRound;
-  const matches = rounds[currentRound] || [];
+  const matches = (rounds[currentRound] && rounds[currentRound].matches) || [];
 
   matches.forEach(m => {
     if (m.aId === 'bye' || m.bId === 'bye' || m.winnerId) return;
