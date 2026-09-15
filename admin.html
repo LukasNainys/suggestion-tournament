@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — Suggestion Tournament</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <h1>Admin</h1>
+      <button id="logout-btn" class="secondary" style="display:none;">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="login-box" class="login-box card">
+      <h2>Admin login</h2>
+      <form id="login-form" class="submit-form">
+        <div>
+          <label for="email">Email</label><br/>
+          <input type="text" id="email" required />
+        </div>
+        <div>
+          <label for="password">Password</label><br/>
+          <input type="password" id="password" required />
+        </div>
+        <button type="submit">Log in</button>
+        <p class="status-msg error" id="login-error"></p>
+      </form>
+    </div>
+
+    <div id="dashboard" style="display:none;">
+
+      <section class="admin-section card">
+        <h2>Tournament settings</h2>
+        <div class="field-row">
+          <div>
+            <label for="title-input">Title</label><br/>
+            <input type="text" id="title-input" />
+          </div>
+          <button id="save-title-btn">Save</button>
+          <span class="status-msg ok" id="title-status"></span>
+        </div>
+        <p class="subtext" style="color:#555; margin-top:1rem;">Current phase: <strong id="current-phase"></strong></p>
+        <div id="phase-controls" style="margin-top:0.75rem;"></div>
+      </section>
+
+      <section class="admin-section card" style="margin-top:1.5rem;">
+        <h2>Suggestions</h2>
+        <div id="suggestions-list"></div>
+      </section>
+
+      <section id="bracket-admin-section" class="admin-section card" style="margin-top:1.5rem; display:none;">
+        <h2>Bracket</h2>
+        <div id="bracket-admin-list"></div>
+        <div id="bracket-next-round-wrap" style="margin-top:1rem;"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
