@@ -177,7 +177,7 @@ async function generateBracket() {
     round0.push(match);
   }
 
-  await setDoc(doc(db, 'config', 'bracket'), { rounds: [round0], currentRound: 0 });
+  await setDoc(doc(db, 'config', 'bracket'), { rounds: [{ matches: round0 }], currentRound: 0 });
   await updateDoc(doc(db, 'config', 'tournament'), { phase: 'voting', currentRound: 0 });
   refreshAll();
 }
@@ -187,10 +187,10 @@ async function renderBracketAdmin(cfg) {
   if (!snap.exists()) return;
   const bracket = snap.data();
   const roundIdx = bracket.currentRound;
-  const matches = bracket.rounds[roundIdx];
+  const matches = bracket.rounds[roundIdx].matches;
 
   const container = document.getElementById('bracket-admin-list');
-  container.innerHTML = `<h3>Round ${roundIdx + 1} of ${Math.log2(bracket.rounds[0].length * 2)}</h3>`;
+  container.innerHTML = `<h3>Round ${roundIdx + 1} of ${Math.log2(bracket.rounds[0].matches.length * 2)}</h3>`;
 
   for (const m of matches) {
     const rowEl = document.createElement('div');
@@ -251,14 +251,14 @@ async function getVoteCounts(matchId, aId, bId) {
 
 async function declareWinner(bracket, roundIdx, matchId, winnerId) {
   const rounds = bracket.rounds;
-  const match = rounds[roundIdx].find(m => m.id === matchId);
+  const match = rounds[roundIdx].matches.find(m => m.id === matchId);
   match.winnerId = winnerId;
   await updateDoc(doc(db, 'config', 'bracket'), { rounds });
   refreshAll();
 }
 
 async function generateNextRound(bracket, roundIdx) {
-  const currentMatches = bracket.rounds[roundIdx];
+  const currentMatches = bracket.rounds[roundIdx].matches;
   const winners = currentMatches.map(m => ({
     id: m.winnerId,
     text: m.winnerId === m.aId ? m.aText : m.bText
@@ -275,7 +275,7 @@ async function generateNextRound(bracket, roundIdx) {
     });
   }
 
-  const rounds = [...bracket.rounds, nextRound];
+  const rounds = [...bracket.rounds, { matches: nextRound }];
   await updateDoc(doc(db, 'config', 'bracket'), { rounds, currentRound: roundIdx + 1 });
   await updateDoc(doc(db, 'config', 'tournament'), { currentRound: roundIdx + 1 });
   refreshAll();
