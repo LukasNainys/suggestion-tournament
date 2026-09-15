@@ -163,25 +163,32 @@ button.secondary {
 .bracket-scroll { overflow-x: auto; padding-bottom: 1rem; }
 
 .bracket-row {
+  --bracket-h: calc(var(--stack-count, 2) * (var(--match-h) + var(--gap)) - var(--gap));
   display: flex;
   gap: 3rem;
-  align-items: stretch;
+  align-items: flex-start;
   min-width: max-content;
+  padding: 1.75rem 2rem 0 0;
 }
 
 .round-col {
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
-  min-width: 230px;
+  justify-content: space-around;
+  min-width: 210px;
+  height: var(--bracket-h);
+  position: relative;
 }
 
 .round-label {
   font-family: 'Anton', sans-serif;
   font-size: 1rem;
   color: var(--gold);
-  margin-bottom: 0.5rem;
   text-align: center;
+  position: absolute;
+  top: -1.75rem;
+  left: 0;
+  right: 0;
 }
 
 .match {
@@ -193,6 +200,26 @@ button.secondary {
   flex-direction: column;
   justify-content: center;
   gap: 0.3rem;
+  position: relative;
+}
+
+.round-col:not(:last-child) .match::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1.5rem;
+  width: 1.5rem;
+  border-top: 2px solid var(--steel);
+}
+
+.round-col:not(:last-child) .match:nth-child(odd)::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1.5rem;
+  width: 2px;
+  height: calc(var(--bracket-h) / var(--n));
+  background: var(--steel);
 }
 
 .contender {
