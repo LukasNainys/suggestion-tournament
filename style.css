@@ -182,7 +182,7 @@ button.secondary {
 
 /* Bracket */
 .bracket-viewport {
-  height: min(70vh, 680px);
+  height: min(50vh, 480px);
   overflow: hidden;
   position: relative;
   cursor: grab;
@@ -206,6 +206,15 @@ button.secondary {
   width: max-content;
   padding: 1.75rem 2rem 1rem 1rem;
   will-change: transform;
+  position: relative;
+}
+
+.connector-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
 }
 
 .round-col {
@@ -238,44 +247,6 @@ button.secondary {
   justify-content: center;
   gap: 0.3rem;
   position: relative;
-}
-
-.round-col:not(.final-col):not(.mirror) .match::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: -3rem;
-  width: 3rem;
-  border-top: 2px solid var(--steel);
-}
-
-.round-col:not(.final-col):not(.mirror) .match:nth-child(odd)::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: -1.5rem;
-  width: 2px;
-  height: calc(var(--bracket-h) / var(--n));
-  background: var(--steel);
-}
-
-.round-col.mirror .match::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: -3rem;
-  width: 3rem;
-  border-top: 2px solid var(--steel);
-}
-
-.round-col.mirror .match:nth-child(odd)::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: -1.5rem;
-  width: 2px;
-  height: calc(var(--bracket-h) / var(--n));
-  background: var(--steel);
 }
 
 .round-col.final-col {
