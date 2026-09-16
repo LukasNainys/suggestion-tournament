@@ -3,38 +3,69 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getFirestore, collection, doc, addDoc, setDoc, onSnapshot, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const authClient = getAuth(app);
 
 const root = document.getElementById('app-root');
 const titleEl = document.getElementById('tournament-title');
 const pillEl = document.getElementById('phase-pill');
 
-// If this page was opened via a private per-friend link (?v=TOKEN), use that
-// token going forward — it identifies a specific person, not just a browser,
-// and is what lets the server (not just this browser) block a second vote.
-// Without a link, fall back to a random per-browser id (weaker, but still works).
-function getVoterToken() {
-  const fromLink = new URLSearchParams(location.search).get('v');
-  if (fromLink) {
-    localStorage.setItem('voterToken', fromLink);
-    return fromLink;
-  }
-  let t = localStorage.getItem('voterToken');
-  if (!t) {
-    t = crypto.randomUUID();
-    localStorage.setItem('voterToken', t);
-  }
-  return t;
-}
-
-function votedKey(stage, matchId) {
-  return `voted_${stage}_${matchId}`;
-}
-
 let currentConfig = null;
 let suggestions = [];
+let bracketData = null;
+let currentUser = null;
+let voterDoc = null;
+let voterUnsub = null;
+
+// Voter accounts don't use real email — we turn their chosen name into a
+// fake-but-valid-looking email address just so Firebase's built-in
+// email/password auth can be reused as a lightweight name+code login.
+function nameToEmail(name) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!slug) return null;
+  return `${slug}@voter.local`;
+}
+
+async function handleVoterAuth(name, code) {
+  const email = nameToEmail(name);
+  if (!email) throw new Error('Please enter a name with at least one letter or number.');
+  if (!/^[0-9]{6}$/.test(code)) throw new Error('Code must be exactly 6 digits.');
+  try {
+    const cred = await createUserWithEmailAndPassword(authClient, email, code);
+    await setDoc(doc(db, 'voters', cred.user.uid), { name, status: 'pending', createdAt: serverTimestamp() });
+  } catch (err) {
+    if (err.code === 'auth/email-already-in-use') {
+      try {
+        await signInWithEmailAndPassword(authClient, email, code);
+      } catch (err2) {
+        throw new Error('That name is already in use with a different code. Try a variation, e.g. add your last initial.');
+      }
+    } else if (err.code === 'auth/weak-password') {
+      throw new Error('Code must be at least 6 digits.');
+    } else {
+      throw new Error('Something went wrong — try again.');
+    }
+  }
+}
+
+onAuthStateChanged(authClient, (user) => {
+  currentUser = user;
+  if (voterUnsub) { voterUnsub(); voterUnsub = null; }
+  if (user) {
+    voterUnsub = onSnapshot(doc(db, 'voters', user.uid), (snap) => {
+      voterDoc = snap.exists() ? snap.data() : null;
+      render();
+    });
+  } else {
+    voterDoc = null;
+    render();
+  }
+});
 
 onSnapshot(doc(db, 'config', 'tournament'), (snap) => {
   currentConfig = snap.exists() ? snap.data() : { phase: 'submissions', title: 'Suggestion Tournament' };
@@ -48,7 +79,6 @@ onSnapshot(collection(db, 'suggestions'), (snap) => {
   if (currentConfig && (currentConfig.phase === 'submissions' || currentConfig.phase === 'locked')) render();
 });
 
-let bracketData = null;
 onSnapshot(doc(db, 'config', 'bracket'), (snap) => {
   bracketData = snap.exists() ? snap.data() : null;
   if (currentConfig && (currentConfig.phase === 'voting' || currentConfig.phase === 'complete')) render();
@@ -69,8 +99,50 @@ function render() {
   if (!currentConfig) return;
   if (currentConfig.phase === 'submissions') renderSubmissions();
   else if (currentConfig.phase === 'locked') renderLocked();
-  else if (currentConfig.phase === 'voting') renderBracket(false);
+  else if (currentConfig.phase === 'voting') {
+    if (!currentUser || !voterDoc || voterDoc.status !== 'approved') renderVoterGate();
+    else renderBracket(false);
+  }
   else if (currentConfig.phase === 'complete') renderBracket(true);
+}
+
+function renderVoterGate() {
+  let statusMsg = '';
+  if (currentUser && voterDoc) {
+    if (voterDoc.status === 'pending') statusMsg = `<p class="status-msg">Hi ${escapeHtml(voterDoc.name)} — waiting for the admin to approve you before you can vote.</p>`;
+    if (voterDoc.status === 'rejected') statusMsg = `<p class="status-msg error">Your request wasn't approved. Check with the admin.</p>`;
+  }
+  root.innerHTML = `
+    <div class="card">
+      <h2>${currentUser ? 'Voting access' : 'Sign in to vote'}</h2>
+      ${!currentUser ? `<p class="subtext" style="color:#555;">Enter your name and pick a 6-digit code you'll remember. First time creates your voting account — the admin approves it before you can vote.</p>` : ''}
+      ${statusMsg}
+      ${!currentUser ? `
+        <form class="submit-form" id="voter-form">
+          <div><label for="voter-name">Your name</label><br/><input type="text" id="voter-name" maxlength="40" required /></div>
+          <div><label for="voter-code">6-digit code</label><br/><input type="text" id="voter-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required /></div>
+          <button type="submit">Continue</button>
+          <p class="status-msg error" id="voter-error"></p>
+        </form>
+      ` : `<button id="voter-signout" class="secondary">Sign out</button>`}
+    </div>
+  `;
+  if (!currentUser) {
+    document.getElementById('voter-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('voter-name').value.trim();
+      const code = document.getElementById('voter-code').value.trim();
+      const errEl = document.getElementById('voter-error');
+      errEl.textContent = '';
+      try {
+        await handleVoterAuth(name, code);
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  } else {
+    document.getElementById('voter-signout').addEventListener('click', () => signOut(authClient));
+  }
 }
 
 function renderSubmissions() {
@@ -128,8 +200,6 @@ function renderLocked() {
 }
 
 // ---- Two-sided bracket rendering ----
-// Layout: [left round 0, left round 1, ... left finalist round] [FINAL] [right finalist round, ... right round 1, right round 0]
-// so both sides visually converge on the center Final match, like a standard tournament poster.
 
 function renderBracket(isComplete) {
   if (!bracketData || !bracketData.left || !bracketData.right) {
@@ -140,7 +210,7 @@ function renderBracket(isComplete) {
   const leftRounds = bracketData.left.rounds;
   const rightRounds = bracketData.right.rounds;
   const stackCount = leftRounds[0].matches.length;
-  const perSideTotalRounds = leftRounds.length; // both sides always advance together
+  const perSideTotalRounds = leftRounds.length;
 
   const leftCols = leftRounds.map((round, ri) => columnHtml(round, ri, perSideTotalRounds, false));
   const rightCols = [...rightRounds].map((round, ri) => ({ round, ri })).reverse()
@@ -153,7 +223,12 @@ function renderBracket(isComplete) {
     </div>
   `;
 
+  const signOutBar = currentUser && voterDoc && voterDoc.status === 'approved'
+    ? `<p class="subtext" style="margin-bottom:1rem;">Voting as ${escapeHtml(voterDoc.name)} — <a href="#" id="voter-signout-link">sign out</a></p>`
+    : '';
+
   root.innerHTML = `
+    ${signOutBar}
     <div class="bracket-scroll">
       <div class="bracket-row" style="--stack-count:${stackCount}">
         ${leftCols.join('')}
@@ -162,6 +237,9 @@ function renderBracket(isComplete) {
       </div>
     </div>
   `;
+
+  const signOutLink = document.getElementById('voter-signout-link');
+  if (signOutLink) signOutLink.addEventListener('click', (e) => { e.preventDefault(); signOut(authClient); });
 
   if (isComplete && bracketData.final && bracketData.final.winnerId) {
     const winner = getContenderText(bracketData.final, bracketData.final.winnerId);
@@ -218,10 +296,8 @@ function renderMatch(m, isCurrentRound) {
       classes.push(id === m.winnerId ? 'winner' : 'loser');
     }
     if (!isCurrentRound || decided) classes.push('locked');
-    // Vote counts are only ever shown once a match is decided, so people
-    // can't see running totals while a round is still open for voting.
     const voteSpan = decided ? `<span class="votes" data-vote-for="${m.id}:${id}"></span>` : '';
-    return `<button type="button" class="${classes.join(' ')}" data-match="${m.id}" data-stage="${m.id}" data-choice="${id}" ${(!isCurrentRound || decided) ? 'disabled' : ''}>
+    return `<button type="button" class="${classes.join(' ')}" data-match="${m.id}" data-choice="${id}" ${(!isCurrentRound || decided) ? 'disabled' : ''}>
       <span>${escapeHtml(text || '')}</span>
       ${voteSpan}
     </button>`;
@@ -241,8 +317,6 @@ function allMatches() {
   return list;
 }
 
-// Shows vote counts only for matches that already have a declared winner
-// (i.e. a round that has closed) — never for the currently open round/final.
 function attachVoteCounts() {
   allMatches().forEach(m => {
     if (!m.winnerId || m.aId === 'bye' || m.bId === 'bye') return;
@@ -262,29 +336,21 @@ function attachVoteCounts() {
 function attachVoteHandlers() {
   document.querySelectorAll('.contender[data-match]:not(:disabled)').forEach(btn => {
     const matchId = btn.dataset.match;
-    const stage = btn.dataset.stage;
-    if (localStorage.getItem(votedKey(stage, matchId))) {
-      btn.classList.add('locked');
-      btn.disabled = true;
-      return;
-    }
     btn.addEventListener('click', async () => {
-      if (localStorage.getItem(votedKey(stage, matchId))) return;
+      if (!currentUser) return;
       const choice = btn.dataset.choice;
-      const voterToken = getVoterToken();
-      const voteId = `${matchId}__${voterToken}`;
+      const voteId = `${matchId}__${currentUser.uid}`;
       try {
         await setDoc(doc(db, 'votes', voteId), {
-          matchId, round: stage, choice, voterToken, createdAt: serverTimestamp()
+          matchId, round: matchId, choice, voterToken: currentUser.uid, createdAt: serverTimestamp()
         });
-        localStorage.setItem(votedKey(stage, matchId), '1');
         document.querySelectorAll(`.contender[data-match="${matchId}"]`).forEach(el => {
           el.classList.add('locked');
           el.disabled = true;
         });
         btn.classList.add('winner');
       } catch (err) {
-        alert('That link has already voted on this match.');
+        alert('That account has already voted on this match.');
       }
     });
   });
