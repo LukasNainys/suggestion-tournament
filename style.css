@@ -181,7 +181,11 @@ button.secondary {
 }
 
 /* Bracket */
-.bracket-scroll { overflow-x: auto; padding-bottom: 1rem; }
+.bracket-scroll {
+  overflow-x: auto;
+  padding-bottom: 1rem;
+  -webkit-overflow-scrolling: touch;
+}
 
 .bracket-row {
   --bracket-h: calc(var(--stack-count, 2) * (var(--match-h) + var(--gap)) - var(--gap));
@@ -343,3 +347,12 @@ footer.admin-link {
 }
 
 .field-row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
+
+@media (max-width: 640px) {
+  :root { --match-h: 96px; }
+  .site-header { padding: 1.5rem 1rem 1rem; }
+  main { padding: 1.5rem 1rem 3rem; }
+  .round-col { min-width: 160px; }
+  .contender { padding: 0.75rem 0.65rem; font-size: 0.85rem; min-height: 44px; }
+  .bracket-row { gap: 2rem; }
+}
