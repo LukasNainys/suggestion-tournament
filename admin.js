@@ -12,6 +12,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Must match the UID hardcoded in firestore.rules' isAdmin(). This stops the
+// dashboard from showing (and then failing on every read/write) if a voter
+// account happens to be signed in on this browser from testing the voting page.
+const ADMIN_UID = "UwMBW1jsOJVdGdyJOgJLDyHGK6t1";
+
 const loginBox = document.getElementById('login-box');
 const dashboard = document.getElementById('dashboard');
 const loginForm = document.getElementById('login-form');
@@ -33,10 +38,18 @@ document.getElementById('logout-btn').addEventListener('click', () => signOut(au
 document.getElementById('full-reset-btn').addEventListener('click', fullReset);
 
 onAuthStateChanged(auth, (user) => {
-  if (user) {
+  if (user && user.uid === ADMIN_UID) {
     loginBox.style.display = 'none';
     dashboard.style.display = 'block';
     initDashboard();
+  } else if (user) {
+    // Signed in, but not as the admin (e.g. a voter account from the
+    // public voting page) — sign out and show the login form instead of a
+    // dashboard that would just fail on every request.
+    loginBox.style.display = 'block';
+    dashboard.style.display = 'none';
+    loginError.textContent = 'That sign-in isn\'t the admin account — log out and use your admin email/password.';
+    signOut(auth);
   } else {
     loginBox.style.display = 'block';
     dashboard.style.display = 'none';
