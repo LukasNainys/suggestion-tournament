@@ -213,18 +213,24 @@ function renderBracket(isComplete) {
   const perSideTotalRounds = Math.log2(stackCount * 2);
 
   const leftCols = [];
+  const roundsBySide = { left: [], right: [] };
   for (let ri = 0; ri < perSideTotalRounds; ri++) {
-    leftCols.push(columnHtml(getRoundMatches(leftRounds, ri, stackCount), ri, perSideTotalRounds, false));
+    const matches = getRoundMatches(leftRounds, ri, stackCount);
+    roundsBySide.left.push(matches.map(m => m.id));
+    leftCols.push(columnHtml(matches, ri, perSideTotalRounds, false));
   }
   const rightCols = [];
   for (let ri = perSideTotalRounds - 1; ri >= 0; ri--) {
-    rightCols.push(columnHtml(getRoundMatches(rightRounds, ri, stackCount), ri, perSideTotalRounds, true));
+    const matches = getRoundMatches(rightRounds, ri, stackCount);
+    roundsBySide.right[ri] = matches.map(m => m.id); // indexed by real round number, not DOM order
+    rightCols.push(columnHtml(matches, ri, perSideTotalRounds, true));
   }
 
+  const finalId = bracketData.final ? bracketData.final.id : 'final-slot';
   const finalCol = `
     <div class="round-col final-col" style="--n:1">
       <div class="round-label">Final</div>
-      ${bracketData.final ? renderMatch(bracketData.final, isFinalOpen()) : `<div class="match"><div class="contender bye">TBD</div><div class="contender bye">TBD</div></div>`}
+      ${bracketData.final ? renderMatch(bracketData.final, isFinalOpen()) : `<div class="match" data-mid="final-slot"><div class="contender bye">TBD</div><div class="contender bye">TBD</div></div>`}
     </div>
   `;
 
@@ -237,6 +243,7 @@ function renderBracket(isComplete) {
     <p class="bracket-hint">Click and drag to look around the bracket</p>
     <div class="bracket-viewport" id="bracket-viewport">
       <div class="bracket-row" id="bracket-row" style="--stack-count:${stackCount}">
+        <svg class="connector-svg" id="connector-svg"></svg>
         ${leftCols.join('')}
         ${finalCol}
         ${rightCols.join('')}
@@ -245,6 +252,7 @@ function renderBracket(isComplete) {
   `;
 
   initBracketPan();
+  drawConnectors(roundsBySide, finalId, perSideTotalRounds);
 
   const signOutLink = document.getElementById('voter-signout-link');
   if (signOutLink) signOutLink.addEventListener('click', (e) => { e.preventDefault(); signOut(authClient); });
@@ -319,7 +327,7 @@ function renderMatch(m, isCurrentRound) {
     </button>`;
   };
 
-  return `<div class="match">
+  return `<div class="match" data-mid="${m.id}">
     ${contender(m.aId, m.aText)}
     ${contender(m.bId, m.bText)}
   </div>`;
@@ -425,6 +433,76 @@ function initBracketPan() {
     move(t.clientX, t.clientY);
   }, { passive: true });
   viewport.addEventListener('touchend', up);
+}
+
+let lastConnectorArgs = null;
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (lastConnectorArgs) drawConnectors(...lastConnectorArgs);
+  }, 150);
+});
+
+function drawConnectors(roundsBySide, finalId, perSideTotalRounds) {
+  lastConnectorArgs = [roundsBySide, finalId, perSideTotalRounds];
+  const bracketRow = document.getElementById('bracket-row');
+  const svg = document.getElementById('connector-svg');
+  if (!bracketRow || !svg) return;
+
+  // Force layout, then size the SVG to exactly cover the (untransformed) content.
+  const w = bracketRow.offsetWidth;
+  const h = bracketRow.offsetHeight;
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+  const originRect = bracketRow.getBoundingClientRect();
+  const lines = [];
+
+  function localEdge(id, edge) {
+    const el = bracketRow.querySelector(`[data-mid="${cssEscape(id)}"]`);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: (edge === 'right' ? r.right : r.left) - originRect.left,
+      y: (r.top + r.height / 2) - originRect.top
+    };
+  }
+
+  function addElbow(idA, idB, parentId, parentEdge, outEdge) {
+    const pA = localEdge(idA, outEdge);
+    const pB = localEdge(idB, outEdge);
+    const pP = localEdge(parentId, parentEdge);
+    if (!pA || !pB || !pP) return;
+    const midX = (pA.x + pP.x) / 2;
+    lines.push([pA.x, pA.y, midX, pA.y]);
+    lines.push([pB.x, pB.y, midX, pB.y]);
+    lines.push([midX, pA.y, midX, pB.y]);
+    lines.push([midX, pP.y, pP.x, pP.y]);
+  }
+
+  ['left', 'right'].forEach((side) => {
+    const outEdge = side === 'left' ? 'right' : 'left';
+    const parentEdge = side === 'left' ? 'left' : 'right';
+    for (let r = 0; r < perSideTotalRounds; r++) {
+      const ids = roundsBySide[side][r];
+      const isLast = r === perSideTotalRounds - 1;
+      const nextIds = isLast ? [finalId] : roundsBySide[side][r + 1];
+      for (let k = 0; k < ids.length; k += 2) {
+        const parentId = isLast ? nextIds[0] : nextIds[k / 2];
+        addElbow(ids[k], ids[k + 1], parentId, parentEdge, outEdge);
+      }
+    }
+  });
+
+  svg.innerHTML = lines.map(([x1, y1, x2, y2]) =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--steel)" stroke-width="2" />`
+  ).join('');
+}
+
+function cssEscape(str) {
+  return String(str).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
 }
 
 function escapeHtml(str) {
