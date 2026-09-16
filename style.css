@@ -182,14 +182,11 @@ button.secondary {
 
 /* Bracket */
 .bracket-viewport {
-  height: min(65vh, 620px);
+  height: min(70vh, 680px);
   overflow: hidden;
   position: relative;
   cursor: grab;
-  border: 1px solid var(--ink-raised);
-  border-radius: 10px;
   touch-action: none;
-  background: rgba(255, 255, 255, 0.02);
 }
 
 .bracket-viewport.dragging { cursor: grabbing; }
@@ -247,8 +244,8 @@ button.secondary {
   content: '';
   position: absolute;
   top: 50%;
-  right: -1.5rem;
-  width: 1.5rem;
+  right: -3rem;
+  width: 3rem;
   border-top: 2px solid var(--steel);
 }
 
@@ -266,8 +263,8 @@ button.secondary {
   content: '';
   position: absolute;
   top: 50%;
-  left: -1.5rem;
-  width: 1.5rem;
+  left: -3rem;
+  width: 3rem;
   border-top: 2px solid var(--steel);
 }
 
