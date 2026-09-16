@@ -215,13 +215,13 @@ function renderBracket(isComplete) {
   const leftCols = [];
   const roundsBySide = { left: [], right: [] };
   for (let ri = 0; ri < perSideTotalRounds; ri++) {
-    const matches = getRoundMatches(leftRounds, ri, stackCount);
-    roundsBySide.left.push(matches.map(m => m.id));
+    const matches = getRoundMatches(leftRounds, ri, stackCount, 'left');
+    roundsBySide.left[ri] = matches.map(m => m.id);
     leftCols.push(columnHtml(matches, ri, perSideTotalRounds, false));
   }
   const rightCols = [];
   for (let ri = perSideTotalRounds - 1; ri >= 0; ri--) {
-    const matches = getRoundMatches(rightRounds, ri, stackCount);
+    const matches = getRoundMatches(rightRounds, ri, stackCount, 'right');
     roundsBySide.right[ri] = matches.map(m => m.id); // indexed by real round number, not DOM order
     rightCols.push(columnHtml(matches, ri, perSideTotalRounds, true));
   }
@@ -275,11 +275,11 @@ function isFinalOpen() {
   return !!bracketData.final && !bracketData.final.winnerId;
 }
 
-function getRoundMatches(sideRounds, roundIndex, stackCount) {
+function getRoundMatches(sideRounds, roundIndex, stackCount, side) {
   if (sideRounds[roundIndex]) return sideRounds[roundIndex].matches;
   const count = stackCount / Math.pow(2, roundIndex);
   return Array.from({ length: count }, (_, i) => ({
-    id: `placeholder-${roundIndex}-${i}`, aId: null, bId: null, aText: '', bText: '', winnerId: null
+    id: `placeholder-${side}-${roundIndex}-${i}`, aId: null, bId: null, aText: '', bText: '', winnerId: null
   }));
 }
 
