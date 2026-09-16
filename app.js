@@ -1,7 +1,7 @@
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, addDoc, onSnapshot, query, where, serverTimestamp
+  getFirestore, collection, doc, addDoc, setDoc, onSnapshot, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -11,9 +11,16 @@ const root = document.getElementById('app-root');
 const titleEl = document.getElementById('tournament-title');
 const pillEl = document.getElementById('phase-pill');
 
-// A per-browser random id so we can stop someone voting twice in the same match
-// from the same browser. Not bulletproof, but enough for a friendly group.
+// If this page was opened via a private per-friend link (?v=TOKEN), use that
+// token going forward — it identifies a specific person, not just a browser,
+// and is what lets the server (not just this browser) block a second vote.
+// Without a link, fall back to a random per-browser id (weaker, but still works).
 function getVoterToken() {
+  const fromLink = new URLSearchParams(location.search).get('v');
+  if (fromLink) {
+    localStorage.setItem('voterToken', fromLink);
+    return fromLink;
+  }
   let t = localStorage.getItem('voterToken');
   if (!t) {
     t = crypto.randomUUID();
@@ -22,8 +29,8 @@ function getVoterToken() {
   return t;
 }
 
-function votedKey(round, matchId) {
-  return `voted_${round}_${matchId}`;
+function votedKey(stage, matchId) {
+  return `voted_${stage}_${matchId}`;
 }
 
 let currentConfig = null;
@@ -120,74 +127,76 @@ function renderLocked() {
   `;
 }
 
+// ---- Two-sided bracket rendering ----
+// Layout: [left round 0, left round 1, ... left finalist round] [FINAL] [right finalist round, ... right round 1, right round 0]
+// so both sides visually converge on the center Final match, like a standard tournament poster.
+
 function renderBracket(isComplete) {
-  if (!bracketData || !bracketData.rounds || bracketData.rounds.length === 0) {
+  if (!bracketData || !bracketData.left || !bracketData.right) {
     root.innerHTML = `<div class="card"><p>Bracket is being set up — check back shortly.</p></div>`;
     return;
   }
 
-  const rounds = bracketData.rounds;
-  const totalRounds = Math.log2(rounds[0].matches.length * 2);
-  const roundNames = rounds.map((_, i) => roundLabel(i, totalRounds));
+  const leftRounds = bracketData.left.rounds;
+  const rightRounds = bracketData.right.rounds;
+  const stackCount = leftRounds[0].matches.length;
+  const perSideTotalRounds = leftRounds.length; // both sides always advance together
+
+  const leftCols = leftRounds.map((round, ri) => columnHtml(round, ri, perSideTotalRounds, false));
+  const rightCols = [...rightRounds].map((round, ri) => ({ round, ri })).reverse()
+    .map(({ round, ri }) => columnHtml(round, ri, perSideTotalRounds, true));
+
+  const finalCol = `
+    <div class="round-col final-col" style="--n:1">
+      <div class="round-label">Final</div>
+      ${bracketData.final ? renderMatch(bracketData.final, isFinalOpen()) : `<div class="match"><div class="contender bye">TBD</div><div class="contender bye">TBD</div></div>`}
+    </div>
+  `;
 
   root.innerHTML = `
     <div class="bracket-scroll">
-      <div class="bracket-row" style="--stack-count:${rounds[0].matches.length}">
-        ${rounds.map((round, ri) => `
-          <div class="round-col" style="--n:${round.matches.length}">
-            <div class="round-label">${roundNames[ri]}</div>
-            ${round.matches.map(m => renderMatch(m, ri)).join('')}
-          </div>
-        `).join('')}
+      <div class="bracket-row" style="--stack-count:${stackCount}">
+        ${leftCols.join('')}
+        ${finalCol}
+        ${rightCols.join('')}
       </div>
     </div>
   `;
 
-  if (isComplete) {
-    const finalRound = rounds[rounds.length - 1].matches;
-    const finalMatch = finalRound[0];
-    const winner = finalMatch && finalMatch.winnerId
-      ? getContenderText(finalMatch, finalMatch.winnerId)
-      : null;
-    if (winner) {
-      root.insertAdjacentHTML('beforeend', `
-        <div class="winner-banner">
-          <div class="label">Winner</div>
-          <div class="display">${escapeHtml(winner)}</div>
-        </div>
-      `);
-    }
+  if (isComplete && bracketData.final && bracketData.final.winnerId) {
+    const winner = getContenderText(bracketData.final, bracketData.final.winnerId);
+    root.insertAdjacentHTML('beforeend', `
+      <div class="winner-banner">
+        <div class="label">Winner</div>
+        <div class="display">${escapeHtml(winner)}</div>
+      </div>
+    `);
   }
 
-  attachVoteCounts(rounds);
-  if (!isComplete) attachVoteHandlers(rounds);
+  attachVoteCounts();
+  if (!isComplete) attachVoteHandlers();
 }
 
-// Shows vote counts only for matches that already have a declared winner
-// (i.e. a round that has closed) — never for the currently open round.
-function attachVoteCounts(rounds) {
-  rounds.forEach(round => {
-    round.matches.forEach(m => {
-      if (!m.winnerId || m.aId === 'bye' || m.bId === 'bye') return;
-      const q = query(collection(db, 'votes'), where('matchId', '==', m.id));
-      onSnapshot(q, (snap) => {
-        const counts = { [m.aId]: 0, [m.bId]: 0 };
-        snap.docs.forEach(d => {
-          const c = d.data().choice;
-          if (c in counts) counts[c]++;
-        });
-        document.querySelectorAll(`[data-vote-for="${m.id}:${m.aId}"]`).forEach(el => el.textContent = counts[m.aId]);
-        document.querySelectorAll(`[data-vote-for="${m.id}:${m.bId}"]`).forEach(el => el.textContent = counts[m.bId]);
-      });
-    });
-  });
+function isFinalOpen() {
+  return !!bracketData.final && !bracketData.final.winnerId;
 }
 
-function roundLabel(i, total) {
+function columnHtml(round, roundIndex, totalRounds, isRightSide) {
+  const label = sideRoundLabel(roundIndex, totalRounds);
+  const isCurrentRound = !bracketData.final && roundIndex === bracketData.currentRound;
+  const mirrorClass = isRightSide ? ' mirror' : '';
+  return `
+    <div class="round-col${mirrorClass}" style="--n:${round.matches.length}">
+      <div class="round-label">${label}</div>
+      ${round.matches.map(m => renderMatch(m, isCurrentRound)).join('')}
+    </div>
+  `;
+}
+
+function sideRoundLabel(i, total) {
   const fromEnd = total - i;
-  if (fromEnd === 1) return 'Final';
-  if (fromEnd === 2) return 'Semifinal';
-  if (fromEnd === 3) return 'Quarterfinal';
+  if (fromEnd === 1) return 'Semifinal';
+  if (fromEnd === 2) return 'Quarterfinal';
   return `Round ${i + 1}`;
 }
 
@@ -198,8 +207,7 @@ function getContenderText(match, id) {
   return '';
 }
 
-function renderMatch(m, roundIndex) {
-  const isCurrentRound = roundIndex === bracketData.currentRound;
+function renderMatch(m, isCurrentRound) {
   const decided = !!m.winnerId;
 
   const contender = (id, text) => {
@@ -213,7 +221,7 @@ function renderMatch(m, roundIndex) {
     // Vote counts are only ever shown once a match is decided, so people
     // can't see running totals while a round is still open for voting.
     const voteSpan = decided ? `<span class="votes" data-vote-for="${m.id}:${id}"></span>` : '';
-    return `<button type="button" class="${classes.join(' ')}" data-match="${m.id}" data-round="${roundIndex}" data-choice="${id}" ${(!isCurrentRound || decided) ? 'disabled' : ''}>
+    return `<button type="button" class="${classes.join(' ')}" data-match="${m.id}" data-stage="${m.id}" data-choice="${id}" ${(!isCurrentRound || decided) ? 'disabled' : ''}>
       <span>${escapeHtml(text || '')}</span>
       ${voteSpan}
     </button>`;
@@ -225,32 +233,58 @@ function renderMatch(m, roundIndex) {
   </div>`;
 }
 
-function attachVoteHandlers(rounds) {
-  const currentRound = bracketData.currentRound;
-  const matches = (rounds[currentRound] && rounds[currentRound].matches) || [];
+function allMatches() {
+  const list = [];
+  bracketData.left.rounds.forEach(r => list.push(...r.matches));
+  bracketData.right.rounds.forEach(r => list.push(...r.matches));
+  if (bracketData.final) list.push(bracketData.final);
+  return list;
+}
 
-  document.querySelectorAll('.contender[data-match]').forEach(btn => {
+// Shows vote counts only for matches that already have a declared winner
+// (i.e. a round that has closed) — never for the currently open round/final.
+function attachVoteCounts() {
+  allMatches().forEach(m => {
+    if (!m.winnerId || m.aId === 'bye' || m.bId === 'bye') return;
+    const q = query(collection(db, 'votes'), where('matchId', '==', m.id));
+    onSnapshot(q, (snap) => {
+      const counts = { [m.aId]: 0, [m.bId]: 0 };
+      snap.docs.forEach(d => {
+        const c = d.data().choice;
+        if (c in counts) counts[c]++;
+      });
+      document.querySelectorAll(`[data-vote-for="${m.id}:${m.aId}"]`).forEach(el => el.textContent = counts[m.aId]);
+      document.querySelectorAll(`[data-vote-for="${m.id}:${m.bId}"]`).forEach(el => el.textContent = counts[m.bId]);
+    });
+  });
+}
+
+function attachVoteHandlers() {
+  document.querySelectorAll('.contender[data-match]:not(:disabled)').forEach(btn => {
     const matchId = btn.dataset.match;
-    const round = btn.dataset.round;
-    if (localStorage.getItem(votedKey(round, matchId))) {
+    const stage = btn.dataset.stage;
+    if (localStorage.getItem(votedKey(stage, matchId))) {
       btn.classList.add('locked');
       btn.disabled = true;
+      return;
     }
     btn.addEventListener('click', async () => {
-      if (localStorage.getItem(votedKey(round, matchId))) return;
+      if (localStorage.getItem(votedKey(stage, matchId))) return;
       const choice = btn.dataset.choice;
+      const voterToken = getVoterToken();
+      const voteId = `${matchId}__${voterToken}`;
       try {
-        await addDoc(collection(db, 'votes'), {
-          matchId, round: Number(round), choice, voterToken: getVoterToken(), createdAt: serverTimestamp()
+        await setDoc(doc(db, 'votes', voteId), {
+          matchId, round: stage, choice, voterToken, createdAt: serverTimestamp()
         });
-        localStorage.setItem(votedKey(round, matchId), '1');
+        localStorage.setItem(votedKey(stage, matchId), '1');
         document.querySelectorAll(`.contender[data-match="${matchId}"]`).forEach(el => {
           el.classList.add('locked');
           el.disabled = true;
         });
         btn.classList.add('winner');
       } catch (err) {
-        alert('Vote failed — try again.');
+        alert('That link has already voted on this match.');
       }
     });
   });
