@@ -203,7 +203,7 @@ button.secondary {
   position: relative;
 }
 
-.round-col:not(:last-child) .match::after {
+.round-col:not(.final-col):not(.mirror) .match::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -212,7 +212,7 @@ button.secondary {
   border-top: 2px solid var(--steel);
 }
 
-.round-col:not(:last-child) .match:nth-child(odd)::before {
+.round-col:not(.final-col):not(.mirror) .match:nth-child(odd)::before {
   content: '';
   position: absolute;
   top: 50%;
@@ -220,6 +220,34 @@ button.secondary {
   width: 2px;
   height: calc(var(--bracket-h) / var(--n));
   background: var(--steel);
+}
+
+.round-col.mirror .match::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -1.5rem;
+  width: 1.5rem;
+  border-top: 2px solid var(--steel);
+}
+
+.round-col.mirror .match:nth-child(odd)::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -1.5rem;
+  width: 2px;
+  height: calc(var(--bracket-h) / var(--n));
+  background: var(--steel);
+}
+
+.round-col.final-col {
+  justify-content: center;
+}
+
+.final-col .match {
+  border: 2px solid var(--gold-dim);
+  min-width: 220px;
 }
 
 .contender {
@@ -281,6 +309,8 @@ footer.admin-link {
 .sugg-row .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
 .sugg-row button { padding: 0.4rem 0.8rem; font-size: 0.82rem; }
 .sugg-row button.reject { background: var(--crimson); color: #fff; }
+
+.btn-danger { background: var(--crimson); color: #fff; }
 
 .login-box {
   max-width: 360px;
