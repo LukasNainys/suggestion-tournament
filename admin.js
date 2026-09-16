@@ -78,8 +78,21 @@ async function refreshAll() {
   await renderSuggestions();
   await renderVoters();
   if (cfg.phase === 'voting' || cfg.phase === 'complete') {
-    await renderBracketAdmin(cfg);
     document.getElementById('bracket-admin-section').style.display = 'block';
+    try {
+      await renderBracketAdmin(cfg);
+    } catch (err) {
+      document.getElementById('bracket-admin-list').innerHTML = `
+        <p class="status-msg error">The bracket data looks broken or out of date (often from an older version of this site). It can't be safely displayed or advanced.</p>
+        <button id="clear-broken-bracket-btn">Clear broken bracket data</button>
+      `;
+      document.getElementById('bracket-next-round-wrap').innerHTML = '';
+      document.getElementById('clear-broken-bracket-btn').addEventListener('click', async () => {
+        await deleteDoc(doc(db, 'config', 'bracket'));
+        await updateDoc(doc(db, 'config', 'tournament'), { phase: 'locked' });
+        refreshAll();
+      });
+    }
   } else {
     document.getElementById('bracket-admin-section').style.display = 'none';
   }
