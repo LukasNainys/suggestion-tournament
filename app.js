@@ -234,14 +234,17 @@ function renderBracket(isComplete) {
 
   root.innerHTML = `
     ${signOutBar}
-    <div class="bracket-scroll">
-      <div class="bracket-row" style="--stack-count:${stackCount}">
+    <p class="bracket-hint">Click and drag to look around the bracket</p>
+    <div class="bracket-viewport" id="bracket-viewport">
+      <div class="bracket-row" id="bracket-row" style="--stack-count:${stackCount}">
         ${leftCols.join('')}
         ${finalCol}
         ${rightCols.join('')}
       </div>
     </div>
   `;
+
+  initBracketPan();
 
   const signOutLink = document.getElementById('voter-signout-link');
   if (signOutLink) signOutLink.addEventListener('click', (e) => { e.preventDefault(); signOut(authClient); });
@@ -367,6 +370,61 @@ function attachVoteHandlers() {
       }
     });
   });
+}
+
+function initBracketPan() {
+  const viewport = document.getElementById('bracket-viewport');
+  const content = document.getElementById('bracket-row');
+  if (!viewport || !content) return;
+
+  let dragging = false;
+  let startPointerX = 0, startPointerY = 0;
+  let startX = 0, startY = 0;
+  let curX = 0, curY = 0;
+
+  function bounds() {
+    const maxNegX = Math.min(0, viewport.clientWidth - content.offsetWidth);
+    const maxNegY = Math.min(0, viewport.clientHeight - content.offsetHeight);
+    return { minX: maxNegX, maxX: 0, minY: maxNegY, maxY: 0 };
+  }
+
+  function apply() {
+    content.style.transform = `translate(${curX}px, ${curY}px)`;
+  }
+
+  function down(x, y) {
+    dragging = true;
+    startPointerX = x; startPointerY = y;
+    startX = curX; startY = curY;
+    viewport.classList.add('dragging');
+  }
+
+  function move(x, y) {
+    if (!dragging) return;
+    const b = bounds();
+    curX = Math.min(b.maxX, Math.max(b.minX, startX + (x - startPointerX)));
+    curY = Math.min(b.maxY, Math.max(b.minY, startY + (y - startPointerY)));
+    apply();
+  }
+
+  function up() {
+    dragging = false;
+    viewport.classList.remove('dragging');
+  }
+
+  viewport.addEventListener('mousedown', (e) => { down(e.clientX, e.clientY); e.preventDefault(); });
+  window.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
+  window.addEventListener('mouseup', up);
+
+  viewport.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    down(t.clientX, t.clientY);
+  }, { passive: true });
+  viewport.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    move(t.clientX, t.clientY);
+  }, { passive: true });
+  viewport.addEventListener('touchend', up);
 }
 
 function escapeHtml(str) {
