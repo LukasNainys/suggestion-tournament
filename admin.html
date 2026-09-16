@@ -58,6 +58,25 @@
         <div id="bracket-next-round-wrap" style="margin-top:1rem;"></div>
       </section>
 
+      <section class="admin-section card" style="margin-top:1.5rem;">
+        <h2>Voter links</h2>
+        <p class="subtext" style="color:#555;">Generate a private link per friend and send each one only to that person (text/DM). Votes are tied to the link, not a typed name — the server blocks a second vote from the same link on the same match.</p>
+        <div class="submit-form" style="max-width:520px;">
+          <div>
+            <label for="voter-names">Names (one per line)</label><br/>
+            <textarea id="voter-names" rows="6" placeholder="Alex&#10;Sam&#10;Jo"></textarea>
+          </div>
+          <button id="gen-links-btn" type="button">Generate links</button>
+        </div>
+        <div id="voter-links-out" style="margin-top:1rem;"></div>
+      </section>
+
+      <section id="danger-section" class="admin-section card" style="margin-top:1.5rem; border:2px solid var(--crimson);">
+        <h2>Danger zone</h2>
+        <p class="subtext" style="color:#555;">Deletes every suggestion, vote, and the bracket, and reopens submissions from scratch. Cannot be undone.</p>
+        <button id="full-reset-btn" class="btn-danger">Reset everything and start over</button>
+      </section>
+
     </div>
   </main>
 
