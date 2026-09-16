@@ -224,7 +224,7 @@ function renderBracket(isComplete) {
   `;
 
   const signOutBar = currentUser && voterDoc && voterDoc.status === 'approved'
-    ? `<p class="subtext" style="margin-bottom:1rem;">Voting as ${escapeHtml(voterDoc.name)} — <a href="#" id="voter-signout-link">sign out</a></p>`
+    ? `<p class="subtext" style="color:var(--text-on-ink); opacity:0.6; margin-bottom:1rem;">Voting as ${escapeHtml(voterDoc.name)} — <a href="#" id="voter-signout-link">sign out</a></p>`
     : '';
 
   root.innerHTML = `
