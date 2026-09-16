@@ -181,10 +181,24 @@ button.secondary {
 }
 
 /* Bracket */
-.bracket-scroll {
-  overflow-x: auto;
-  padding-bottom: 1rem;
-  -webkit-overflow-scrolling: touch;
+.bracket-viewport {
+  height: min(65vh, 620px);
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  border: 1px solid var(--ink-raised);
+  border-radius: 10px;
+  touch-action: none;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.bracket-viewport.dragging { cursor: grabbing; }
+
+.bracket-hint {
+  text-align: center;
+  font-size: 0.8rem;
+  opacity: 0.5;
+  margin-bottom: 0.5rem;
 }
 
 .bracket-row {
@@ -192,8 +206,9 @@ button.secondary {
   display: flex;
   gap: 3rem;
   align-items: flex-start;
-  min-width: max-content;
-  padding: 1.75rem 2rem 0 0;
+  width: max-content;
+  padding: 1.75rem 2rem 1rem 1rem;
+  will-change: transform;
 }
 
 .round-col {
