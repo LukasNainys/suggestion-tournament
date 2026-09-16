@@ -97,7 +97,7 @@ main {
   padding: 2.5rem 1.5rem 4rem;
 }
 
-.subtext { color: var(--text-on-ink); opacity: 0.72; margin-top: 0.4rem; }
+.subtext { color: var(--text-on-paper); opacity: 0.65; margin-top: 0.4rem; }
 
 .card {
   background: var(--paper);
