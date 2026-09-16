@@ -56,6 +56,27 @@ a { color: var(--gold); }
   font-size: clamp(1.8rem, 5vw, 3rem);
 }
 
+.site-nav {
+  max-width: 960px;
+  margin: 1rem auto 0;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.site-nav a {
+  padding: 0.5rem 1rem;
+  border-radius: 999px 999px 0 0;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-on-ink);
+  opacity: 0.6;
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+
+.site-nav a:hover { opacity: 0.85; }
+.site-nav a.active { opacity: 1; border-bottom-color: var(--gold); color: var(--gold); }
+
 .phase-pill {
   display: inline-block;
   padding: 0.4rem 0.9rem;
@@ -286,6 +307,10 @@ footer.admin-link {
   padding: 2rem 0;
   opacity: 0.4;
   font-size: 0.8rem;
+}
+
+.build-tag {
+  font-family: monospace;
 }
 
 /* Admin */
