@@ -210,11 +210,16 @@ function renderBracket(isComplete) {
   const leftRounds = bracketData.left.rounds;
   const rightRounds = bracketData.right.rounds;
   const stackCount = leftRounds[0].matches.length;
-  const perSideTotalRounds = leftRounds.length;
+  const perSideTotalRounds = Math.log2(stackCount * 2);
 
-  const leftCols = leftRounds.map((round, ri) => columnHtml(round, ri, perSideTotalRounds, false));
-  const rightCols = [...rightRounds].map((round, ri) => ({ round, ri })).reverse()
-    .map(({ round, ri }) => columnHtml(round, ri, perSideTotalRounds, true));
+  const leftCols = [];
+  for (let ri = 0; ri < perSideTotalRounds; ri++) {
+    leftCols.push(columnHtml(getRoundMatches(leftRounds, ri, stackCount), ri, perSideTotalRounds, false));
+  }
+  const rightCols = [];
+  for (let ri = perSideTotalRounds - 1; ri >= 0; ri--) {
+    rightCols.push(columnHtml(getRoundMatches(rightRounds, ri, stackCount), ri, perSideTotalRounds, true));
+  }
 
   const finalCol = `
     <div class="round-col final-col" style="--n:1">
@@ -259,14 +264,22 @@ function isFinalOpen() {
   return !!bracketData.final && !bracketData.final.winnerId;
 }
 
-function columnHtml(round, roundIndex, totalRounds, isRightSide) {
+function getRoundMatches(sideRounds, roundIndex, stackCount) {
+  if (sideRounds[roundIndex]) return sideRounds[roundIndex].matches;
+  const count = stackCount / Math.pow(2, roundIndex);
+  return Array.from({ length: count }, (_, i) => ({
+    id: `placeholder-${roundIndex}-${i}`, aId: null, bId: null, aText: '', bText: '', winnerId: null
+  }));
+}
+
+function columnHtml(matches, roundIndex, totalRounds, isRightSide) {
   const label = sideRoundLabel(roundIndex, totalRounds);
   const isCurrentRound = !bracketData.final && roundIndex === bracketData.currentRound;
   const mirrorClass = isRightSide ? ' mirror' : '';
   return `
-    <div class="round-col${mirrorClass}" style="--n:${round.matches.length}">
+    <div class="round-col${mirrorClass}" style="--n:${matches.length}">
       <div class="round-label">${label}</div>
-      ${round.matches.map(m => renderMatch(m, isCurrentRound)).join('')}
+      ${matches.map(m => renderMatch(m, isCurrentRound)).join('')}
     </div>
   `;
 }
