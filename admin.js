@@ -31,24 +31,6 @@ loginForm.addEventListener('submit', async (e) => {
 
 document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 document.getElementById('full-reset-btn').addEventListener('click', fullReset);
-document.getElementById('gen-links-btn').addEventListener('click', generateVoterLinks);
-
-function generateVoterLinks() {
-  const names = document.getElementById('voter-names').value
-    .split('\n').map(n => n.trim()).filter(Boolean);
-  const baseUrl = location.href.replace(/admin\.html.*$/, 'index.html');
-  const out = document.getElementById('voter-links-out');
-  if (names.length === 0) {
-    out.innerHTML = '<p class="subtext">Enter at least one name above.</p>';
-    return;
-  }
-  out.innerHTML = names.map(name => {
-    const token = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
-    const link = `${baseUrl}?v=${token}`;
-    return `<div class="sugg-row"><span><strong>${escapeHtml(name)}</strong></span>
-      <span class="actions"><input type="text" readonly value="${escapeHtml(link)}" style="width:280px; font-size:0.8rem;" onclick="this.select()" /></span></div>`;
-  }).join('');
-}
 
 onAuthStateChanged(auth, (user) => {
   if (user) {
@@ -81,6 +63,7 @@ async function refreshAll() {
   document.getElementById('current-phase').textContent = cfg.phase;
   renderPhaseControls(cfg);
   await renderSuggestions();
+  await renderVoters();
   if (cfg.phase === 'voting' || cfg.phase === 'complete') {
     await renderBracketAdmin(cfg);
     document.getElementById('bracket-admin-section').style.display = 'block';
@@ -162,6 +145,44 @@ function suggRow(s, actions) {
   }).join('');
   return `<div class="sugg-row">
     <span>${escapeHtml(s.text)} ${s.submitter ? `<span class="submitter">— ${escapeHtml(s.submitter)}</span>` : ''}</span>
+    <span class="actions">${btns}</span>
+  </div>`;
+}
+
+async function renderVoters() {
+  const snap = await getDocs(collection(db, 'voters'));
+  const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const pending = all.filter(v => v.status === 'pending');
+  const approved = all.filter(v => v.status === 'approved');
+  const rejected = all.filter(v => v.status === 'rejected');
+
+  const list = document.getElementById('voters-list');
+  list.innerHTML = `
+    <h3>Pending (${pending.length})</h3>
+    ${pending.map(v => voterRow(v, ['approve', 'reject'])).join('') || '<p class="subtext">None.</p>'}
+    <h3 style="margin-top:1.5rem;">Approved (${approved.length})</h3>
+    ${approved.map(v => voterRow(v, ['reject'])).join('') || '<p class="subtext">None yet.</p>'}
+    <h3 style="margin-top:1.5rem;">Rejected (${rejected.length})</h3>
+    ${rejected.map(v => voterRow(v, ['approve'])).join('') || '<p class="subtext">None.</p>'}
+  `;
+
+  list.querySelectorAll('[data-v-approve]').forEach(btn => btn.addEventListener('click', async () => {
+    await updateDoc(doc(db, 'voters', btn.dataset.vApprove), { status: 'approved' });
+    refreshAll();
+  }));
+  list.querySelectorAll('[data-v-reject]').forEach(btn => btn.addEventListener('click', async () => {
+    await updateDoc(doc(db, 'voters', btn.dataset.vReject), { status: 'rejected' });
+    refreshAll();
+  }));
+}
+
+function voterRow(v, actions) {
+  const btns = actions.map(a => {
+    if (a === 'approve') return `<button data-v-approve="${v.id}">Approve</button>`;
+    if (a === 'reject') return `<button class="reject" data-v-reject="${v.id}">Reject</button>`;
+  }).join('');
+  return `<div class="sugg-row">
+    <span>${escapeHtml(v.name)}</span>
     <span class="actions">${btns}</span>
   </div>`;
 }
