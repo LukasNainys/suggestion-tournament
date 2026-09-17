@@ -209,20 +209,24 @@ function renderBracket(isComplete) {
 
   const leftRounds = bracketData.left.rounds;
   const rightRounds = bracketData.right.rounds;
-  const stackCount = leftRounds[0].matches.length;
+  // Round 1 can now be smaller than usual (byes skip it), so Round 2 — which
+  // always has exactly half the side's total slots — is the true reference
+  // size for column height/tapering math, falling back to Round 1 only for
+  // the smallest possible bracket (a single round per side, no Round 2 at all).
+  const stackCount = (leftRounds[1] || leftRounds[0]).matches.length;
   const perSideTotalRounds = Math.log2(stackCount * 2);
 
   const leftCols = [];
   const roundsBySide = { left: [], right: [] };
   for (let ri = 0; ri < perSideTotalRounds; ri++) {
     const matches = getRoundMatches(leftRounds, ri, stackCount, 'left');
-    roundsBySide.left[ri] = matches.map(m => m.id);
+    roundsBySide.left[ri] = matches.map(m => ({ id: m.id, aSourceMatchId: m.aSourceMatchId, bSourceMatchId: m.bSourceMatchId }));
     leftCols.push(columnHtml(matches, ri, perSideTotalRounds, false));
   }
   const rightCols = [];
   for (let ri = perSideTotalRounds - 1; ri >= 0; ri--) {
     const matches = getRoundMatches(rightRounds, ri, stackCount, 'right');
-    roundsBySide.right[ri] = matches.map(m => m.id); // indexed by real round number, not DOM order
+    roundsBySide.right[ri] = matches.map(m => ({ id: m.id, aSourceMatchId: m.aSourceMatchId, bSourceMatchId: m.bSourceMatchId })); // indexed by real round number, not DOM order
     rightCols.push(columnHtml(matches, ri, perSideTotalRounds, true));
   }
 
@@ -281,7 +285,10 @@ function isFinalOpen() {
 
 function getRoundMatches(sideRounds, roundIndex, stackCount, side) {
   if (sideRounds[roundIndex]) return sideRounds[roundIndex].matches;
-  const count = stackCount / Math.pow(2, roundIndex);
+  // stackCount is Round 2's size (array index 1); this placeholder path only
+  // ever runs for rounds beyond what's stored (index 2+), since Round 1 and
+  // Round 2 are always pre-built already.
+  const count = roundIndex === 0 ? stackCount * 2 : stackCount / Math.pow(2, roundIndex - 1);
   return Array.from({ length: count }, (_, i) => ({
     id: `placeholder-${side}-${roundIndex}-${i}`, aId: null, bId: null, aText: '', bText: '', winnerId: null
   }));
@@ -521,16 +528,50 @@ function drawConnectors(roundsBySide, finalId, perSideTotalRounds) {
     lines.push([midX, pP.y, pP.x, pP.y]);
   }
 
+  // A single, direct connector from one match straight to another — used
+  // wherever a match's result feeds just one specific next-round slot
+  // (following a match's own source link) rather than merging a pair.
+  function addDirectLine(sourceId, targetId, outEdge, parentEdge) {
+    const pS = localEdge(sourceId, outEdge);
+    const pT = localEdge(targetId, parentEdge);
+    if (!pS || !pT) return;
+    const midX = (pS.x + pT.x) / 2;
+    lines.push([pS.x, pS.y, midX, pS.y]);
+    lines.push([midX, pS.y, midX, pT.y]);
+    lines.push([midX, pT.y, pT.x, pT.y]);
+  }
+
   ['left', 'right'].forEach((side) => {
     const outEdge = side === 'left' ? 'right' : 'left';
     const parentEdge = side === 'left' ? 'left' : 'right';
     for (let r = 0; r < perSideTotalRounds; r++) {
-      const ids = roundsBySide[side][r];
       const isLast = r === perSideTotalRounds - 1;
-      const nextIds = isLast ? [finalId] : roundsBySide[side][r + 1];
-      for (let k = 0; k < ids.length; k += 2) {
-        const parentId = isLast ? nextIds[0] : nextIds[k / 2];
-        addElbow(ids[k], ids[k + 1], parentId, parentEdge, outEdge);
+
+      if (isLast) {
+        // The side's single finalist-producing match connects straight to
+        // the center Final match — not a pair-merge, just one line.
+        addDirectLine(roundsBySide[side][r][0].id, finalId, outEdge, parentEdge);
+        continue;
+      }
+
+      const nextMeta = roundsBySide[side][r + 1];
+      const usesSourceLinks = nextMeta.some(m => m.aSourceMatchId !== undefined || m.bSourceMatchId !== undefined);
+
+      if (usesSourceLinks) {
+        // Byes were pre-placed into this round — some slots have no
+        // predecessor match at all (nothing to draw), and matches that DO
+        // feed in are linked explicitly rather than by position.
+        nextMeta.forEach((m) => {
+          if (m.aSourceMatchId) addDirectLine(m.aSourceMatchId, m.id, outEdge, parentEdge);
+          if (m.bSourceMatchId) addDirectLine(m.bSourceMatchId, m.id, outEdge, parentEdge);
+        });
+      } else {
+        // Ordinary round — every two matches merge into the next one, in order.
+        const curIds = roundsBySide[side][r].map(x => x.id);
+        for (let k = 0; k < curIds.length; k += 2) {
+          const parentId = nextMeta[k / 2].id;
+          addElbow(curIds[k], curIds[k + 1], parentId, parentEdge, outEdge);
+        }
       }
     }
   });
