@@ -262,11 +262,13 @@ button.secondary {
   border-radius: 8px;
   padding: 0.4rem;
   min-height: var(--match-h);
+  max-height: var(--match-h);
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 0.3rem;
   position: relative;
+  overflow: hidden;
 }
 
 .round-col.final-col {
@@ -292,6 +294,19 @@ button.secondary {
   font-size: 0.9rem;
   color: var(--text-on-ink);
   font-family: inherit;
+  width: 100%;
+  overflow: hidden;
+}
+
+.contender > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.contender .votes {
+  flex-shrink: 0;
 }
 
 .contender:hover:not(:disabled):not(.locked) { border-color: var(--gold-dim); }
