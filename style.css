@@ -19,12 +19,17 @@
 
 html { color-scheme: dark; }
 
+html, body { height: 100%; }
+
 body {
   margin: 0;
   background: var(--ink);
   color: var(--text-on-ink);
   font-family: 'Work Sans', system-ui, sans-serif;
   line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 h1, h2, h3, .display {
@@ -91,10 +96,17 @@ a { color: var(--gold); }
 .phase-pill.locked { background: var(--steel); color: #101216; }
 .phase-pill.complete { background: var(--crimson); color: #fff; }
 
+.site-header { flex-shrink: 0; }
+
 main {
   max-width: min(1500px, 96vw);
   margin: 0 auto;
-  padding: 2.5rem 1.5rem 4rem;
+  padding: 2.5rem 1.5rem 2rem;
+  width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .subtext { color: var(--text-on-paper); opacity: 0.65; margin-top: 0.4rem; }
@@ -181,8 +193,16 @@ button.secondary {
 }
 
 /* Bracket */
+#app-root {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .bracket-viewport {
-  height: min(58vh, 560px);
+  flex: 1 1 auto;
+  min-height: 300px;
   overflow: hidden;
   position: relative;
   cursor: grab;
