@@ -315,6 +315,25 @@ button.secondary {
 .contender.loser { opacity: 0.4; }
 .contender.selected { outline: 2px solid var(--gold); outline-offset: 2px; }
 .contender.bye { opacity: 0.35; font-style: italic; cursor: default; }
+
+.bye-match {
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.bye-match .contender {
+  justify-content: center;
+  cursor: default;
+  width: auto;
+  max-width: 90%;
+}
+
+.bye-note {
+  font-size: 0.68rem;
+  color: var(--steel);
+  font-style: italic;
+  text-align: center;
+}
 .contender .votes { font-weight: 700; color: var(--gold); font-size: 0.85rem; }
 
 .winner-banner {
@@ -324,6 +343,24 @@ button.secondary {
 
 .winner-banner .label { color: var(--steel); font-size: 1rem; margin-bottom: 0.5rem; }
 .winner-banner .display { font-size: clamp(2rem, 6vw, 3.5rem); color: var(--gold); }
+
+.confetti-piece {
+  position: fixed;
+  top: -12px;
+  width: 8px;
+  height: 14px;
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 9999;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(360deg); opacity: 0.3; }
+}
 
 footer.admin-link {
   text-align: center;
