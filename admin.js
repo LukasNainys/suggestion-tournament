@@ -1,4 +1,3 @@
-
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
@@ -257,15 +256,17 @@ async function generateBracket() {
     alert('Approve at least 4 suggestions before generating a two-sided bracket.');
     return;
   }
-  // shuffle
+  // pad to next power of two with byes, THEN shuffle everything together —
+  // shuffling before padding left all the byes clustered at the end, which
+  // meant one whole side could end up mostly byes after the split.
+  let size = 1;
+  while (size < entries.length) size *= 2;
+  while (entries.length < size) entries.push({ id: 'bye', text: 'Bye' });
+
   for (let i = entries.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [entries[i], entries[j]] = [entries[j], entries[i]];
   }
-  // pad to next power of two with byes
-  let size = 1;
-  while (size < entries.length) size *= 2;
-  while (entries.length < size) entries.push({ id: 'bye', text: 'Bye' });
 
   const half = size / 2;
   const leftEntries = entries.slice(0, half);
