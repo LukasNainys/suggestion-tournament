@@ -36,6 +36,35 @@ loginForm.addEventListener('submit', async (e) => {
 
 document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 document.getElementById('full-reset-btn').addEventListener('click', fullReset);
+document.getElementById('bulk-add-btn').addEventListener('click', bulkAddSuggestions);
+
+async function bulkAddSuggestions() {
+  const raw = document.getElementById('bulk-add-text').value;
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 200);
+  const statusEl = document.getElementById('bulk-add-status');
+  if (lines.length === 0) {
+    statusEl.textContent = 'Paste at least one line first.';
+    statusEl.className = 'status-msg error';
+    return;
+  }
+  const btn = document.getElementById('bulk-add-btn');
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  try {
+    await Promise.all(lines.map(text => addDoc(collection(db, 'suggestions'), {
+      text: text.slice(0, 199), submitter: '', status: 'approved', createdAt: serverTimestamp()
+    })));
+    statusEl.textContent = `Added ${lines.length} suggestions.`;
+    statusEl.className = 'status-msg ok';
+    document.getElementById('bulk-add-text').value = '';
+  } catch (err) {
+    statusEl.textContent = 'Something went wrong — try again.';
+    statusEl.className = 'status-msg error';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Add these as suggestions';
+  refreshAll();
+}
 
 onAuthStateChanged(auth, (user) => {
   if (user && user.uid === ADMIN_UID) {
@@ -251,22 +280,38 @@ async function seedSampleSuggestions() {
 
 async function generateBracket() {
   const snap = await getDocs(query(collection(db, 'suggestions'), where('status', '==', 'approved')));
-  let entries = snap.docs.map(d => ({ id: d.id, text: d.data().text }));
-  if (entries.length < 4) {
+  let realEntries = snap.docs.map(d => ({ id: d.id, text: d.data().text }));
+  if (realEntries.length < 4) {
     alert('Approve at least 4 suggestions before generating a two-sided bracket.');
     return;
   }
-  // pad to next power of two with byes, THEN shuffle everything together —
-  // shuffling before padding left all the byes clustered at the end, which
-  // meant one whole side could end up mostly byes after the split.
-  let size = 1;
-  while (size < entries.length) size *= 2;
-  while (entries.length < size) entries.push({ id: 'bye', text: 'Bye' });
-
-  for (let i = entries.length - 1; i > 0; i--) {
+  // shuffle the real entries first
+  for (let i = realEntries.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [entries[i], entries[j]] = [entries[j], entries[i]];
+    [realEntries[i], realEntries[j]] = [realEntries[j], realEntries[i]];
   }
+
+  let size = 1;
+  while (size < realEntries.length) size *= 2;
+  const byeCount = size - realEntries.length;
+
+  // Pair each bye with a real entry (never bye-vs-bye), pair the rest of the
+  // real entries with each other, then shuffle the PAIRS so bye placement
+  // and match order are both randomized without ever creating a bye-vs-bye
+  // "ghost" match that would advance with nothing behind it.
+  const pairs = [];
+  for (let i = 0; i < byeCount; i++) {
+    pairs.push([realEntries[i], { id: 'bye', text: 'Bye' }]);
+  }
+  const remaining = realEntries.slice(byeCount);
+  for (let i = 0; i < remaining.length; i += 2) {
+    pairs.push([remaining[i], remaining[i + 1]]);
+  }
+  for (let i = pairs.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+  }
+  const entries = pairs.flat();
 
   const half = size / 2;
   const leftEntries = entries.slice(0, half);
