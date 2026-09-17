@@ -4,7 +4,7 @@ import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch,
   collection, getDocs, addDoc, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -462,16 +462,23 @@ async function fullReset() {
       getDocs(collection(db, 'suggestions')),
       getDocs(collection(db, 'votes'))
     ]);
-    await Promise.all([
-      ...suggSnap.docs.map(d => deleteDoc(doc(db, 'suggestions', d.id))),
-      ...voteSnap.docs.map(d => deleteDoc(doc(db, 'votes', d.id)))
-    ]);
+    const refs = [
+      ...suggSnap.docs.map(d => doc(db, 'suggestions', d.id)),
+      ...voteSnap.docs.map(d => doc(db, 'votes', d.id))
+    ];
+    // Firestore batches are capped at 500 writes, so chunk it.
+    for (let i = 0; i < refs.length; i += 450) {
+      const batch = writeBatch(db);
+      refs.slice(i, i + 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
     await deleteDoc(doc(db, 'config', 'bracket')).catch(() => {});
     await setDoc(doc(db, 'config', 'tournament'), {
       phase: 'submissions', currentRound: 0, title: document.getElementById('title-input').value.trim() || 'Suggestion Tournament'
     });
   } catch (err) {
-    alert('Something went wrong during reset — check the console and try again.');
+    alert(`Something went wrong during reset: ${err.code || ''} ${err.message || err}. Check the console for more detail and try again.`);
+    console.error('fullReset failed:', err);
   }
 
   btn.disabled = false;
