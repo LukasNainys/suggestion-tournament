@@ -191,6 +191,15 @@ async function renderSuggestions() {
     await updateDoc(doc(db, 'suggestions', btn.dataset.reject), { status: 'rejected' });
     refreshAll();
   }));
+  list.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', async () => {
+    const current = btn.dataset.currentText;
+    const next = prompt('Edit suggestion text:', current);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === current) return;
+    await updateDoc(doc(db, 'suggestions', btn.dataset.edit), { text: trimmed.slice(0, 199) });
+    refreshAll();
+  }));
 }
 
 function suggRow(s, actions) {
@@ -200,7 +209,10 @@ function suggRow(s, actions) {
   }).join('');
   return `<div class="sugg-row">
     <span>${escapeHtml(s.text)} ${s.submitter ? `<span class="submitter">— ${escapeHtml(s.submitter)}</span>` : ''}</span>
-    <span class="actions">${btns}</span>
+    <span class="actions">
+      <button class="secondary" data-edit="${s.id}" data-current-text="${escapeHtml(s.text)}">Edit</button>
+      ${btns}
+    </span>
   </div>`;
 }
 
