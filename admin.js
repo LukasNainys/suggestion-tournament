@@ -286,9 +286,15 @@ async function seedSampleSuggestions() {
 }
 
 // ---- Two-sided bracket ----
-// Entries are padded to a power of two, split into a left half and a right
-// half, and each half runs its own single-elimination mini-bracket. Once
-// both halves are down to one finalist each, a Final match combines them.
+// Entries are split into a left half and right half, each running its own
+// single-elimination mini-bracket. Once both halves are down to one
+// finalist each, a Final match combines them.
+//
+// Byes: Round 1 only ever contains real head-to-head pairings. Any entries
+// that don't have an opponent are placed directly into Round 2, appearing
+// immediately — the same way Challonge and similar bracket tools handle
+// byes — and Round 2's other slots fill in automatically as each Round 1
+// match's winner is declared (see declareWinner's propagation step below).
 
 async function generateBracket() {
   const snap = await getDocs(query(collection(db, 'suggestions'), where('status', '==', 'approved')));
@@ -297,49 +303,87 @@ async function generateBracket() {
     alert('Approve at least 4 suggestions before generating a two-sided bracket.');
     return;
   }
-  // shuffle the real entries first
-  for (let i = realEntries.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [realEntries[i], realEntries[j]] = [realEntries[j], realEntries[i]];
-  }
+  shuffleArray(realEntries);
 
   let size = 1;
   while (size < realEntries.length) size *= 2;
-  const byeCount = size - realEntries.length;
-
-  // Pair each bye with a real entry (never bye-vs-bye), pair the rest of the
-  // real entries with each other, then shuffle the PAIRS so bye placement
-  // and match order are both randomized without ever creating a bye-vs-bye
-  // "ghost" match that would advance with nothing behind it.
-  const pairs = [];
-  for (let i = 0; i < byeCount; i++) {
-    pairs.push([realEntries[i], { id: 'bye', text: 'Bye' }]);
-  }
-  const remaining = realEntries.slice(byeCount);
-  for (let i = 0; i < remaining.length; i += 2) {
-    pairs.push([remaining[i], remaining[i + 1]]);
-  }
-  for (let i = pairs.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
-  }
-  const entries = pairs.flat();
-
   const half = size / 2;
-  const leftEntries = entries.slice(0, half);
-  const rightEntries = entries.slice(half);
 
-  const leftRound0 = buildRound(leftEntries, 'L', 0);
-  const rightRound0 = buildRound(rightEntries, 'R', 0);
+  // Split real entries between sides as evenly as possible (each side's own
+  // bye count, if any, is handled independently inside buildSideBracket).
+  const leftCount = Math.ceil(realEntries.length / 2);
+  const leftReal = realEntries.slice(0, leftCount);
+  const rightReal = realEntries.slice(leftCount);
+
+  const leftRounds = buildSideBracket(leftReal, 'L', half);
+  const rightRounds = buildSideBracket(rightReal, 'R', half);
 
   await setDoc(doc(db, 'config', 'bracket'), {
-    left: { rounds: [{ matches: leftRound0 }] },
-    right: { rounds: [{ matches: rightRound0 }] },
+    left: { rounds: leftRounds },
+    right: { rounds: rightRounds },
     currentRound: 0,
     final: null
   });
   await updateDoc(doc(db, 'config', 'tournament'), { phase: 'voting', currentRound: 0 });
   refreshAll();
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Builds one side's rounds. If this side only has room for a single round
+// (half === 2), there's no "next round" to skip ahead into, so it falls
+// back to the simple pad-with-a-literal-bye behavior. Otherwise it builds
+// Round 1 (real pairings only) and pre-builds Round 2 with byes placed
+// directly and the rest marked as pending a specific Round 1 match's result.
+function buildSideBracket(sideRealEntries, sidePrefix, half) {
+  const perSideTotalRounds = Math.log2(half);
+
+  if (perSideTotalRounds <= 1) {
+    const padded = [...sideRealEntries];
+    while (padded.length < half) padded.push({ id: 'bye', text: 'Bye' });
+    return [{ matches: buildRound(padded, sidePrefix, 0) }];
+  }
+
+  const byeCount = half - sideRealEntries.length;
+  const shuffled = shuffleArray([...sideRealEntries]);
+  const byeRecipients = shuffled.slice(0, byeCount);
+  const matchPlayers = shuffled.slice(byeCount);
+
+  const round0 = [];
+  for (let i = 0; i < matchPlayers.length; i += 2) {
+    round0.push({
+      id: `${sidePrefix}r0m${round0.length}`,
+      aId: matchPlayers[i].id, aText: matchPlayers[i].text,
+      bId: matchPlayers[i + 1].id, bText: matchPlayers[i + 1].text,
+      winnerId: null
+    });
+  }
+
+  // Each Round 2 slot is either a known bye recipient, or "pending" — waiting
+  // on a specific Round 1 match's winner (aSourceMatchId / bSourceMatchId).
+  const feedIns = shuffleArray([
+    ...byeRecipients.map(e => ({ id: e.id, text: e.text, sourceMatchId: null })),
+    ...round0.map(m => ({ id: null, text: '', sourceMatchId: m.id }))
+  ]);
+
+  const round1 = [];
+  for (let i = 0; i < feedIns.length; i += 2) {
+    const a = feedIns[i], b = feedIns[i + 1];
+    round1.push({
+      id: `${sidePrefix}r1m${round1.length}`,
+      aId: a.id, aText: a.text, aSourceMatchId: a.sourceMatchId,
+      bId: b.id, bText: b.text, bSourceMatchId: b.sourceMatchId,
+      winnerId: null
+    });
+  }
+
+  return [{ matches: round0 }, { matches: round1 }];
 }
 
 function buildRound(entries, sidePrefix, roundIndex) {
@@ -387,7 +431,8 @@ async function renderBracketAdmin(cfg) {
   const roundIdx = bracket.currentRound;
   const leftMatches = bracket.left.rounds[roundIdx].matches;
   const rightMatches = bracket.right.rounds[roundIdx].matches;
-  const totalRounds = bracket.left.rounds[0].matches.length > 0 ? Math.log2(bracket.left.rounds[0].matches.length * 2) : 1;
+  const refRound = bracket.left.rounds[1] || bracket.left.rounds[0];
+  const totalRounds = Math.log2(refRound.matches.length * 2);
 
   container.innerHTML = `<h3>Round ${roundIdx + 1} of ${totalRounds} (per side)</h3><h4 style="margin-top:1rem;">Left side</h4>`;
   for (const m of leftMatches) container.appendChild(await matchRow(m, 'left', roundIdx));
@@ -403,6 +448,15 @@ async function renderBracketAdmin(cfg) {
     if (leftMatches.length === 1) {
       nextBtnWrap.innerHTML = `<button id="final-btn">Both finalists decided — create the Final match</button>`;
       document.getElementById('final-btn').addEventListener('click', () => generateFinal(bracket, roundIdx));
+    } else if (bracket.left.rounds[roundIdx + 1]) {
+      // Next round was already pre-built (byes filled in as we went) —
+      // nothing to generate, just open it for voting.
+      nextBtnWrap.innerHTML = `<button id="advance-btn">Advance to next round</button>`;
+      document.getElementById('advance-btn').addEventListener('click', async () => {
+        await updateDoc(doc(db, 'config', 'bracket'), { currentRound: roundIdx + 1 });
+        await updateDoc(doc(db, 'config', 'tournament'), { currentRound: roundIdx + 1 });
+        refreshAll();
+      });
     } else {
       nextBtnWrap.innerHTML = `<button id="next-round-btn">Generate next round (both sides)</button>`;
       document.getElementById('next-round-btn').addEventListener('click', () => generateNextRound(bracket, roundIdx));
@@ -451,6 +505,18 @@ async function declareWinner(bracket, side, roundIdx, matchId, winnerId) {
   const sideData = side === 'left' ? bracket.left : bracket.right;
   const match = sideData.rounds[roundIdx].matches.find(m => m.id === matchId);
   match.winnerId = winnerId;
+  const winnerText = winnerId === match.aId ? match.aText : match.bText;
+
+  // If the next round was already pre-built (the bye-skip case), fill in
+  // whichever of its slots was waiting on this specific match's result.
+  const nextRound = sideData.rounds[roundIdx + 1];
+  if (nextRound) {
+    nextRound.matches.forEach(m => {
+      if (m.aSourceMatchId === matchId) { m.aId = winnerId; m.aText = winnerText; m.aSourceMatchId = null; }
+      if (m.bSourceMatchId === matchId) { m.bId = winnerId; m.bText = winnerText; m.bSourceMatchId = null; }
+    });
+  }
+
   await updateDoc(doc(db, 'config', 'bracket'), { [side]: sideData });
   refreshAll();
 }
