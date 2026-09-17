@@ -1,7 +1,7 @@
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, addDoc, setDoc, onSnapshot, query, where, serverTimestamp
+  getFirestore, collection, doc, getDoc, addDoc, setDoc, onSnapshot, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
@@ -268,7 +268,10 @@ function renderBracket(isComplete) {
   }
 
   attachVoteCounts();
-  if (!isComplete) attachVoteHandlers();
+  if (!isComplete) {
+    attachVoteHandlers();
+    applyExistingVotes();
+  }
 }
 
 function isFinalOpen() {
@@ -372,12 +375,37 @@ function attachVoteHandlers() {
           el.classList.add('locked');
           el.disabled = true;
         });
-        btn.classList.add('winner');
+        btn.classList.add('selected');
       } catch (err) {
         alert('That account has already voted on this match.');
       }
     });
   });
+}
+
+// Marks whichever option the signed-in voter already picked on each
+// currently-open match, so their choice stays visible across logins,
+// browsers, or just leaving and coming back — not just this page load.
+async function applyExistingVotes() {
+  if (!currentUser) return;
+  const openMatchIds = new Set();
+  document.querySelectorAll('.contender[data-match]:not(:disabled)').forEach(btn => openMatchIds.add(btn.dataset.match));
+
+  for (const matchId of openMatchIds) {
+    try {
+      const snap = await getDoc(doc(db, 'votes', `${matchId}__${currentUser.uid}`));
+      if (snap.exists()) {
+        const choice = snap.data().choice;
+        document.querySelectorAll(`.contender[data-match="${matchId}"]`).forEach((btn) => {
+          btn.classList.add('locked');
+          btn.disabled = true;
+          if (btn.dataset.choice === choice) btn.classList.add('selected');
+        });
+      }
+    } catch (err) {
+      // If the check fails, just leave the match voteable as normal.
+    }
+  }
 }
 
 function initBracketPan() {
