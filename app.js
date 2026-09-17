@@ -265,6 +265,7 @@ function renderBracket(isComplete) {
         <div class="display">${escapeHtml(winner)}</div>
       </div>
     `);
+    celebrateWinner();
   }
 
   attachVoteCounts();
@@ -313,6 +314,16 @@ function getContenderText(match, id) {
 }
 
 function renderMatch(m, isCurrentRound) {
+  if (m.aId === 'bye' || m.bId === 'bye') {
+    const winnerText = m.winnerId === 'bye' ? 'Bye' : getContenderText(m, m.winnerId);
+    return `<div class="match bye-match" data-mid="${m.id}">
+      <div class="contender winner">
+        <span>${escapeHtml(winnerText)}</span>
+      </div>
+      <div class="bye-note">auto-advances (bye)</div>
+    </div>`;
+  }
+
   const decided = !!m.winnerId;
 
   const contender = (id, text) => {
@@ -531,6 +542,23 @@ function drawConnectors(roundsBySide, finalId, perSideTotalRounds) {
 
 function cssEscape(str) {
   return String(str).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+}
+
+let confettiShown = false;
+function celebrateWinner() {
+  if (confettiShown) return;
+  confettiShown = true;
+  const colors = ['#e3a83b', '#c1502f', '#6fa287', '#7b8492', '#f5f2ea'];
+  for (let i = 0; i < 70; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.animationDelay = (Math.random() * 0.4) + 's';
+    el.style.animationDuration = (2.2 + Math.random() * 1.6) + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4500);
+  }
 }
 
 function escapeHtml(str) {
