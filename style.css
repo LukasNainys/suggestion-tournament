@@ -298,6 +298,7 @@ button.secondary {
 .contender:disabled, .contender.locked { cursor: default; }
 .contender.winner { border-color: var(--gold); background: #2a2210; }
 .contender.loser { opacity: 0.4; }
+.contender.selected { outline: 2px solid var(--gold); outline-offset: 2px; }
 .contender.bye { opacity: 0.35; font-style: italic; cursor: default; }
 .contender .votes { font-weight: 700; color: var(--gold); font-size: 0.85rem; }
 
