@@ -52,6 +52,16 @@
       </section>
 
       <section class="admin-section card" style="margin-top:1.5rem;">
+        <h2>Bulk-add suggestions</h2>
+        <p class="subtext" style="color:#555;">Paste a list, one suggestion per line. They're added pre-approved, same as the sample button below.</p>
+        <div class="submit-form" style="max-width:520px;">
+          <textarea id="bulk-add-text" rows="8" placeholder="Bowling night&#10;Trivia night&#10;Escape room"></textarea>
+          <button id="bulk-add-btn" type="button">Add these as suggestions</button>
+          <p class="status-msg" id="bulk-add-status"></p>
+        </div>
+      </section>
+
+      <section class="admin-section card" style="margin-top:1.5rem;">
         <h2>Suggestions</h2>
         <div id="suggestions-list"></div>
       </section>
@@ -78,7 +88,7 @@
   </main>
 
   <footer class="admin-link">
-    <span class="build-tag">Build Sep 16, 5:05 PM</span>
+    <span class="build-tag">Build Sep 16, 8:00 PM</span>
   </footer>
 
   <script type="module" src="admin.js"></script>
